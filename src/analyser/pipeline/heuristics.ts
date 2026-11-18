@@ -1,16 +1,19 @@
 import { LanguagesScema } from '../../types/schema.js';
 import * as T from '../../types/types.js';
+import createYielder from '../../program/utils/yieldToEventLoop.js';
 import byHeuristics from '../classifiers/byHeuristics.js';
 
-export function resolveHeuristics(
+export async function resolveHeuristics(
 	files: T.VirtualFile[],
 	classifications: Record<string, string[]>,
 	heuristicsData: unknown,
 	langData: LanguagesScema,
 	opts: T.Options
-): Record<string, string | undefined> {
+): Promise<Record<string, string | undefined>> {
 	const resolved: Record<string, string | undefined> = {};
+	const yieldToEventLoop = createYielder();
 	for (const file of files) {
+		await yieldToEventLoop();
 		const candidateLanguages = classifications[file.path] ?? [];
 		const heuristicLanguage = byHeuristics(file, candidateLanguages, heuristicsData, langData, opts)[0];
 		if (heuristicLanguage) {

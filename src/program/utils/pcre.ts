@@ -1,5 +1,16 @@
-/** Convert a PCRE regex into JS. */
+const cache = new Map<string, RegExp>();
+
+/** Convert a PCRE regex into JS. Results are cached, so the returned regex must not be used with stateful (`g`/`y`) flags. */
 export default function pcre(regex: string): RegExp {
+	let converted = cache.get(regex);
+	if (!converted) {
+		converted = convertPcre(regex);
+		cache.set(regex, converted);
+	}
+	return converted;
+}
+
+function convertPcre(regex: string): RegExp {
 	let finalRegex = regex;
 	const replace = (search: string | RegExp, replace: string) => finalRegex = finalRegex.replace(search, replace);
 	const finalFlags = new Set<string>();

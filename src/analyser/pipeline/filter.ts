@@ -9,6 +9,7 @@ function getIgnorePath(filePath: string): string {
 }
 
 export function filterFiles(files: T.VirtualFile[], opts: T.Options): T.VirtualFile[] {
+	const manuallyIgnored = opts.ignoredFiles?.length ? ignore().add(opts.ignoredFiles) : undefined;
 	return files.filter((file) => {
 		// Skip binary files
 		if (!opts.keepBinary && (file.isBinary || file.attributes?.binary === true)) {
@@ -22,7 +23,7 @@ export function filterFiles(files: T.VirtualFile[], opts: T.Options): T.VirtualF
 			return false;
 		}
 		// Skip manually ignored files
-		if (opts.ignoredFiles?.length && ignore().add(opts.ignoredFiles).ignores(getIgnorePath(file.path))) {
+		if (manuallyIgnored?.ignores(getIgnorePath(file.path))) {
 			return false;
 		}
 		return true;

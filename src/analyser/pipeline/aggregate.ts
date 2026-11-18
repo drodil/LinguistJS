@@ -1,4 +1,5 @@
 import Path from 'node:path';
+import createYielder from '../../program/utils/yieldToEventLoop.js';
 import * as T from '../../types/types.js';
 
 const categoryKeys: T.Category[] = ['data', 'markup', 'programming', 'prose'];
@@ -6,6 +7,22 @@ const categoryKeys: T.Category[] = ['data', 'markup', 'programming', 'prose'];
 function pickBestLanguage(classifications: string[]): string | null {
 	// Assign first language as a default option
 	return classifications[0] ?? null;
+}
+
+/** Count the total and non-blank lines without allocating an array of all lines. */
+function countLines(content: string): { total: number; content: number } {
+	let total = 0;
+	let nonBlank = 0;
+	let start = 0;
+	while (true) {
+		const newline = content.indexOf('\n', start);
+		const end = newline === -1 ? content.length : newline;
+		total++;
+		if (/\S/.test(content.slice(start, end))) nonBlank++;
+		if (newline === -1) break;
+		start = newline + 1;
+	}
+	return { total, content: nonBlank };
 }
 
 function makeRelPath(path: string): string {
@@ -20,13 +37,13 @@ function normPath(filePath: string): string {
 	return filePath.replace(/\\\\/g, '/');
 }
 
-export function aggregateResults(
+export async function aggregateResults(
 	files: T.VirtualFile[],
 	classifications: Record<string, string[]>,
 	heuristicResolutions: Record<string, string | undefined>,
 	langData: { [language: string]: T.LanguageMetadata },
 	opts: T.Options
-): T.Results {
+): Promise<T.Results> {
 	const results: T.Results = {
 		files: { count: 0, bytes: 0, lines: { total: 0, content: 0 }, results: {} },
 		languages: { count: 0, bytes: 0, lines: { total: 0, content: 0 }, results: {} },
@@ -38,7 +55,9 @@ export function aggregateResults(
 	const allowedCategories = opts.categories ?? categoryKeys;
 	const hiddenCategories = categoryKeys.filter((category) => !allowedCategories.includes(category));
 
+	const yieldToEventLoop = createYielder();
 	for (const file of files) {
+		await yieldToEventLoop();
 		// Narrow down file associations to the best fit
 		const candidates = classifications[file.path] ?? [];
 		// If no heuristics, assign a language
@@ -51,12 +70,7 @@ export function aggregateResults(
 		// Load language bytes size
 		const size = file.size ?? file.content?.length ?? 0;
 		// Calculate lines of code
-		const lineContent = file.content ?? '';
-		const allLines = opts.calculateLines === false ? [] : lineContent.split(/\r?\n/gm);
-		const loc = {
-			total: opts.calculateLines === false ? NaN : allLines.length,
-			content: opts.calculateLines === false ? NaN : allLines.filter((line) => line.trim().length > 0).length,
-		};
+		const loc = opts.calculateLines === false ? { total: NaN, content: NaN } : countLines(file.content ?? '');
 		const outputPath = opts.relativePaths && Path.isAbsolute(file.path) ? makeRelPath(file.path) : file.path;
 
 		if (!selectedLanguage) {

@@ -37,10 +37,10 @@ export default function byHeuristics(
 	if (!opts.checkHeuristics || file.content === undefined) return [];
 	// Skip if file has explicit association
 	if (file.attributes?.language) return [];
+	if (candidateLanguages.length <= 1) return [];
 	if (byFilename(file, langData).length) return [];
 	if (byShebang(file, langData, opts).length) return [];
 	if (byModeline(file, langData, opts).length) return [];
-	if (candidateLanguages.length <= 1) return [];
 	const extension = file.extension ?? '';
 	for (const heuristics of heuristicsData.disambiguations ?? []) {
 		// Make sure the extension matches the current file

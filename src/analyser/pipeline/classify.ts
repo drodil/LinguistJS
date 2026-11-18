@@ -1,4 +1,5 @@
 import { LanguagesScema } from '../../types/schema.js';
+import createYielder from '../../program/utils/yieldToEventLoop.js';
 import * as T from '../../types/types.js';
 import byAttributes from '../classifiers/byAttributes.js';
 import byExtension from '../classifiers/byExtension.js';
@@ -18,9 +19,11 @@ function dedupeClassifications(classifications: string[]): string[] {
 	return ordered;
 }
 
-export function classifyFiles(files: T.VirtualFile[], langData: LanguagesScema, opts: T.Options): Record<string, string[]> {
+export async function classifyFiles(files: T.VirtualFile[], langData: LanguagesScema, opts: T.Options): Promise<Record<string, string[]>> {
 	const classifications: Record<string, string[]> = {};
+	const yieldToEventLoop = createYielder();
 	for (const file of files) {
+		await yieldToEventLoop();
 		// Search each language
 		// Note: order here is important; the first match will be the one chosen
 		const candidates: string[] = [

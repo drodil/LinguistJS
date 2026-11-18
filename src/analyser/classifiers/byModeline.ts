@@ -5,6 +5,20 @@ const modelineRegex = /-\*-|(?:syntax|filetype|ft)\s*=/;
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const modelineMatchers = new WeakMap<LanguagesScema, Array<{ lang: string; regexes: RegExp[] }>>();
+
+function getModelineMatchers(langData: LanguagesScema) {
+	let matchers = modelineMatchers.get(langData);
+	if (matchers) return matchers;
+	const toRegex = (name: string) => new RegExp(`\\b${escapeRegExp(name.toLowerCase())}(?![\\w#+*]|-\\*-)`);
+	matchers = Object.entries(langData).map(([lang, data]) => ({
+		lang,
+		regexes: [toRegex(lang), ...(data.aliases ?? []).map(toRegex)],
+	}));
+	modelineMatchers.set(langData, matchers);
+	return matchers;
+}
+
 export default function byModeline(file: T.VirtualFile, langData: LanguagesScema, opts: T.Options): string[] {
 	if (!opts.checkModeline || opts.quick) return [];
 	const firstLine = file.firstLine;
@@ -13,14 +27,7 @@ export default function byModeline(file: T.VirtualFile, langData: LanguagesScema
 
 	const modelineText = firstLine.toLowerCase().split(modelineRegex)[1] ?? '';
 	// Add identified language(s)
-	return Object.entries(langData).flatMap(([lang, data]) => {
-		const safeLang = escapeRegExp(lang.toLowerCase());
-		const matchesLang = new RegExp(`\\b${safeLang}(?![\\w#+*]|-\\*-)`).test(modelineText);
-		const aliases = data.aliases ?? [];
-		const matchesAlias = aliases.some((alias) => {
-			const safeAlias = escapeRegExp(alias.toLowerCase());
-			return new RegExp(`\\b${safeAlias}(?![\\w#+*]|-\\*-)`).test(modelineText);
-		});
-		return matchesLang || matchesAlias ? [lang] : [];
+	return getModelineMatchers(langData).flatMap(({ lang, regexes }) => {
+		return regexes.some((regex) => regex.test(modelineText)) ? [lang] : [];
 	});
 }

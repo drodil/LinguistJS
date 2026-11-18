@@ -1,7 +1,11 @@
 # Changelog
 
 ## Unreleased
-- Improved performance on large folders by reusing the precompiled vendor patterns and using sets for file exclusion instead of per-file regex compilation and quadratic filtering ([#50](https://github.com/Nixinova/LinguistJS/issues/50)).
+- Greatly improved performance on large folders ([#50](https://github.com/Nixinova/LinguistJS/issues/50)):
+  - Vendor patterns are now compiled once instead of per file.
+  - Language lookups by filename and extension, shebang/modeline matchers and heuristic patterns are now indexed or cached instead of being rebuilt for every file.
+  - Removed quadratic file filtering and repeated work when walking the folder tree.
+- The analysis now yields to the event loop regularly instead of blocking it for the whole run.
 
 ## 3.0.4
 *2026-09-18*

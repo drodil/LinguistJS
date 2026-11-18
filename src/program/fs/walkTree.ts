@@ -1,15 +1,10 @@
 import { Ignore } from 'ignore';
 import FS from 'node:fs';
-import Path from 'node:path';
 import parseGitignore from '../parsing/parseGitignore.js';
+import createYielder from '../utils/yieldToEventLoop.js';
 import { normAbsPath, normPath } from './normalisedPath.js';
 
-let allFiles: Set<string>;
-let allFolders: Set<string>;
-
 interface WalkInput {
-	/** Whether this is walking the tree from the root */
-	init: boolean;
 	/** The common root absolute path of all folders being checked */
 	commonRoot: string;
 	/** The absolute path that each folder is relative to */
@@ -25,15 +20,26 @@ interface WalkOutput {
 	folders: string[];
 }
 
-/** Generate list of files in a directory. */
-export default function walkTree(data: WalkInput): WalkOutput {
-	const { init, commonRoot, folderRoots, folders, ignored } = data;
+interface WalkState {
+	allFiles: Set<string>;
+	allFolders: Set<string>;
+	yieldToEventLoop: () => Promise<void>;
+}
 
-	// Initialise files and folders lists
-	if (init) {
-		allFiles = new Set();
-		allFolders = new Set();
-	}
+/** Generate list of files in a directory. */
+export default async function walkTree(data: WalkInput): Promise<WalkOutput> {
+	const state: WalkState = { allFiles: new Set(), allFolders: new Set(), yieldToEventLoop: createYielder() };
+	await walkFolders(data, state);
+	// Return absolute files and folders lists
+	return {
+		files: [...state.allFiles].map((file) => file.replace(/^\./, data.commonRoot)),
+		folders: [...state.allFolders],
+	};
+}
+
+async function walkFolders(data: WalkInput, state: WalkState): Promise<void> {
+	const { commonRoot, folderRoots, folders, ignored } = data;
+	const { allFiles, allFolders, yieldToEventLoop } = state;
 
 	// Walk tree of a folder
 	if (folders.length === 1) {
@@ -41,12 +47,11 @@ export default function walkTree(data: WalkInput): WalkOutput {
 		const localRoot = folderRoots[0].replace(commonRoot, '').replace(/^\//, '');
 
 		// Get list of files and folders inside this folder
-		const files = FS.readdirSync(folder).map((file) => {
+		const files = FS.readdirSync(folder, { withFileTypes: true }).map((entry) => {
 			// Create path relative to root
-			const base = normAbsPath(folder, file).replace(commonRoot, '.');
+			const base = normAbsPath(folder, entry.name).replace(commonRoot, '.');
 			// Add trailing slash to mark directories
-			const isDir = FS.lstatSync(Path.resolve(commonRoot, base)).isDirectory();
-			return isDir ? `${base}/` : base;
+			return entry.isDirectory() ? `${base}/` : base;
 		});
 
 		// Read and apply gitignores
@@ -72,6 +77,7 @@ export default function walkTree(data: WalkInput): WalkOutput {
 
 		// Loop through files and folders
 		for (const file of files) {
+			await yieldToEventLoop();
 			// Create absolute path for disc operations
 			const path = normAbsPath(commonRoot, file);
 			const localPath = localRoot ? file.replace(`./${localRoot}/`, '') : file.replace('./', '');
@@ -89,7 +95,7 @@ export default function walkTree(data: WalkInput): WalkOutput {
 			if (file.endsWith('/')) {
 				// Recurse into subfolders
 				allFolders.add(path);
-				walkTree({ init: false, commonRoot, folderRoots, folders: [path], ignored });
+				await walkFolders({ commonRoot, folderRoots, folders: [path], ignored }, state);
 			} else {
 				// Add file path to list
 				allFiles.add(path);
@@ -99,12 +105,7 @@ export default function walkTree(data: WalkInput): WalkOutput {
 	// Recurse into all folders
 	else {
 		for (const i in folders) {
-			walkTree({ init: false, commonRoot, folderRoots: [folderRoots[i]], folders: [folders[i]], ignored });
+			await walkFolders({ commonRoot, folderRoots: [folderRoots[i]], folders: [folders[i]], ignored }, state);
 		}
 	}
-	// Return absolute files and folders lists
-	return {
-		files: [...allFiles].map((file) => file.replace(/^\./, commonRoot)),
-		folders: [...allFolders],
-	};
 }

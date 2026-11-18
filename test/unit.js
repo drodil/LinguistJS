@@ -1,3 +1,5 @@
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import linguist from '../dist/index.js';
 
 let i = 0;
@@ -80,6 +82,20 @@ async function unitTest() {
 	await test(['file', '',], ['files', undefined], { ignoredFiles: 'file' });
 	await test(['./file', '',], ['files', undefined], { ignoredFiles: 'file' });
 	await test(['/tmp/file', ''], ['files', undefined], { ignoredFiles: 'file' });
+
+	desc('line endings');
+	await test(['crlf_node', '#!/usr/bin/env node\r\nconsole.log(1)\r\n'], ['files', 'JavaScript']);
+	await test(['crlf_vim', '# vim: filetype=sh\r\nx'], ['files', 'Shell']);
+	desc('concurrent analyses');
+	const samples = dirname(fileURLToPath(import.meta.url)) + '/samples';
+	const [first, second] = await Promise.all([
+		linguist.analyseFolders([samples], { offline: true }),
+		linguist.analyseFolders([samples + '/../samples'], { offline: true }),
+	]);
+	if (first.files.count === 0 || JSON.stringify(first) !== JSON.stringify(second)) {
+		errors++;
+		console.error('! concurrent folder analyses returned differing results');
+	}
 
 	if (errors) {
 		console.error(`\n! Exited with ${errors} errors.\n`);
