@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Improved performance on large folders by reusing the precompiled vendor patterns and using sets for file exclusion instead of per-file regex compilation and quadratic filtering ([#50](https://github.com/Nixinova/LinguistJS/issues/50)).
+
 ## 3.0.4
 *2026-09-18*
 - Fixed crash occuring when a symbolic link pointing to a directory is present ([#49](https://github.com/Nixinova/LinguistJS/issues/49)).

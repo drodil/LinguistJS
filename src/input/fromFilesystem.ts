@@ -47,7 +47,7 @@ export default async function fromFilesystem(input: FileInput[], opts: T.Options
 		}
 	}
 
-	const filesToIgnore: string[] = [];
+	const filesToIgnore = new Set<string>();
 	for (const file of files) {
 		const relative = relPath(file);
 		const isRegexIgnored = regexIgnores.some((pattern) => pattern.test(relative));
@@ -55,9 +55,9 @@ export default async function fromFilesystem(input: FileInput[], opts: T.Options
 
 		const fileAttrs = manualAttributes.findAttrsForPath(relative);
 		if (fileAttrs?.generated === false || fileAttrs?.vendored === false) continue;
-		filesToIgnore.push(file);
+		filesToIgnore.add(file);
 	}
-	files = files.filter((file) => !filesToIgnore.includes(file));
+	files = files.filter((file) => !filesToIgnore.has(file));
 
 	if (!opts.keepVendored) {
 		const vendorTrueGlobs = [
@@ -73,8 +73,9 @@ export default async function fromFilesystem(input: FileInput[], opts: T.Options
 		const vendorTrueIgnore = ignore().add(vendorTrueGlobs);
 		const vendorFalseIgnore = ignore().add(vendorFalseGlobs);
 
-		const excludedFiles = files.filter((file) => vendorPaths.some((pathPtn) => RegExp(pathPtn, 'i').test(relPath(file))));
-		files = files.filter((file) => !excludedFiles.includes(file));
+		const excludedFiles = files.filter((file) => regexIgnores.some((pattern) => pattern.test(relPath(file))));
+		const excludedFileSet = new Set(excludedFiles);
+		files = files.filter((file) => !excludedFileSet.has(file));
 		const overriddenExcludedFiles = excludedFiles.filter((file) => vendorFalseIgnore.ignores(relPath(file)));
 		files.push(...overriddenExcludedFiles);
 		files = files.filter((file) => !vendorTrueIgnore.ignores(relPath(file)));
